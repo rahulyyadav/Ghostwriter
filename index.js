@@ -1,4 +1,5 @@
 const { App } = require('@slack/bolt');
+const http = require('http');
 const config = require('./src/config/config');
 const logger = require('./src/utils/logger');
 const { testConnection } = require('./src/database/supabaseClient');
@@ -10,9 +11,26 @@ const lifecycleManager = require('./src/services/lifecycleManager');
 const healthCheck = require('./src/utils/health');
 const metrics = require('./src/utils/metrics');
 
+// HTTP server for health checks (keeps Render free tier awake)
+const PORT = process.env.PORT || 3000;
+const healthServer = http.createServer((req, res) => {
+  if (req.url === '/health' || req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('I am alive 🚀');
+  } else {
+    res.writeHead(404);
+    res.end('Not found');
+  }
+});
+
 async function main() {
   try {
     logger.info('🚀 Starting Post Suggestion Bot...');
+
+    // Start health server FIRST (Render needs to detect port binding immediately)
+    healthServer.listen(PORT, '0.0.0.0', () => {
+      logger.info(`✅ Health server listening on port ${PORT}`);
+    });
 
     // Test database connection
     logger.info('Testing Supabase connection...');
