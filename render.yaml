@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: postsuggestionbot-slack
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SLACK_APP_TOKEN
+        sync: false
+      - key: SLACK_SIGNING_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: LEONARDO_API_KEY
+        sync: false
+      - key: SLACK_WORKSPACE_ID
+        value: T0ABUH0TDNG
+      - key: MAX_BATCH_SIZE
+        value: 100
+      - key: SILENCE_TIMEOUT
+        value: 180
+      - key: OVERLAP_SIZE
+        value: 20
