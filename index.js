@@ -11,12 +11,37 @@ const lifecycleManager = require('./src/services/lifecycleManager');
 const healthCheck = require('./src/utils/health');
 const metrics = require('./src/utils/metrics');
 
-// HTTP server for health checks (keeps Render free tier awake)
+const fs = require('fs');
+const path = require('path');
+
+// HTTP server for health checks and Landing Page
 const PORT = process.env.PORT || 3000;
 const healthServer = http.createServer((req, res) => {
-  if (req.url === '/health' || req.url === '/') {
+  if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('I am alive 🚀');
+  } else if (req.url === '/' || req.url === '/home' || req.url === '/landing' || req.url === '/index.html') {
+    // Serve Landing Page
+    fs.readFile(path.join(__dirname, 'landing_page', 'index.html'), (err, data) => {
+      if (err) {
+        res.writeHead(500);
+        res.end('Error loading landing page');
+      } else {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(data);
+      }
+    });
+  } else if (req.url === '/styles.css') {
+    // Serve CSS
+    fs.readFile(path.join(__dirname, 'landing_page', 'styles.css'), (err, data) => {
+      if (err) {
+        res.writeHead(500);
+        res.end('Error loading styles');
+      } else {
+        res.writeHead(200, { 'Content-Type': 'text/css' });
+        res.end(data);
+      }
+    });
   } else {
     res.writeHead(404);
     res.end('Not found');
