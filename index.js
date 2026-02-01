@@ -1,8 +1,8 @@
-const { App } = require('@slack/bolt');
-const http = require('http');
+const { App, ExpressReceiver } = require('@slack/bolt');
+const express = require('express');
 const config = require('./src/config/config');
 const logger = require('./src/utils/logger');
-const { testConnection } = require('./src/database/supabaseClient');
+const { testConnection, supabase } = require('./src/database/supabaseClient');
 const EventHandler = require('./src/slack/eventHandler');
 const notifier = require('./src/slack/notifier');
 const commandHandler = require('./src/services/commandHandler');
@@ -14,86 +14,150 @@ const metrics = require('./src/utils/metrics');
 const fs = require('fs');
 const path = require('path');
 
-// HTTP server for health checks and Landing Page
 const PORT = process.env.PORT || 3000;
-const healthServer = http.createServer((req, res) => {
-  if (req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('I am alive 🚀');
-  } else if (req.url === '/' || req.url === '/home' || req.url === '/landing' || req.url === '/index.html') {
-    // Serve Landing Page
-    fs.readFile(path.join(__dirname, 'landing_page', 'index.html'), (err, data) => {
-      if (err) {
-        res.writeHead(500);
-        res.end('Error loading landing page');
-      } else {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(data);
-      }
-    });
-  } else if (req.url === '/styles.css') {
-    // Serve CSS
-    fs.readFile(path.join(__dirname, 'landing_page', 'styles.css'), (err, data) => {
-      if (err) {
-        res.writeHead(500);
-        res.end('Error loading styles');
-      } else {
-        res.writeHead(200, { 'Content-Type': 'text/css' });
-        res.end(data);
-      }
-    });
-  } else if (req.url && req.url.startsWith('/slack/oauth_redirect')) {
-    // Handle Slack OAuth redirect - show success page
-    res.writeHead(200, { 'Content-Type': 'text/html' });
-    res.end(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Ghostwriter - Installation</title>
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-          .card { background: white; padding: 40px 60px; border-radius: 16px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-          h1 { color: #333; margin-bottom: 10px; }
-          p { color: #666; font-size: 18px; }
-          .emoji { font-size: 48px; margin-bottom: 20px; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <div class="emoji">🎉</div>
-          <h1>Thanks for your interest!</h1>
-          <p>Ghostwriter is currently in private beta.</p>
-          <p>Contact us to get access!</p>
-        </div>
-      </body>
-      </html>
-    `);
-  } else {
-    res.writeHead(404);
-    res.end('Not found');
-  }
-});
 
 async function main() {
   try {
-    logger.info('🚀 Starting Post Suggestion Bot...');
+    logger.info('🚀 Starting Ghostwriter Bot...');
 
-    // Start health server FIRST (Render needs to detect port binding immediately)
-    healthServer.listen(PORT, '0.0.0.0', () => {
-      logger.info(`✅ Health server listening on port ${PORT}`);
-    });
-
-    // Test database connection
+    // Test database connection first
     logger.info('Testing Supabase connection...');
     await testConnection();
 
-    // Initialize Slack app
+    // Create Express receiver for HTTP mode (handles OAuth + events)
+    const receiver = new ExpressReceiver({
+      signingSecret: process.env.SLACK_SIGNING_SECRET,
+      clientId: process.env.SLACK_CLIENT_ID,
+      clientSecret: process.env.SLACK_CLIENT_SECRET,
+      stateSecret: process.env.STATE_SECRET || 'ghostwriter-state-secret-2026',
+      scopes: [
+        'chat:write',
+        'channels:history',
+        'groups:history',
+        'im:history',
+        'mpim:history',
+        'app_mentions:read',
+        'files:write',
+        'users:read',
+      ],
+      installerOptions: {
+        directInstall: true,
+        redirectUriPath: '/slack/oauth_redirect',
+      },
+      installationStore: {
+        storeInstallation: async (installation) => {
+          logger.info('📦 Storing installation', {
+            teamId: installation.team?.id,
+            enterpriseId: installation.enterprise?.id
+          });
+
+          const id = installation.isEnterpriseInstall
+            ? installation.enterprise?.id
+            : installation.team?.id;
+
+          if (!id) {
+            throw new Error('No team or enterprise id found');
+          }
+
+          const { error } = await supabase
+            .from('slack_installations')
+            .upsert({
+              id,
+              installation_type: installation.isEnterpriseInstall ? 'enterprise' : 'team',
+              installation_data: installation,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'id' });
+
+          if (error) {
+            logger.error('Failed to store installation', { error: error.message });
+            throw error;
+          }
+
+          logger.info('✅ Installation stored successfully', { id });
+        },
+
+        fetchInstallation: async (installQuery) => {
+          const id = installQuery.isEnterpriseInstall
+            ? installQuery.enterpriseId
+            : installQuery.teamId;
+
+          logger.debug('Fetching installation', { id });
+
+          const { data, error } = await supabase
+            .from('slack_installations')
+            .select('installation_data')
+            .eq('id', id)
+            .single();
+
+          if (error) {
+            logger.error('Failed to fetch installation', { id, error: error.message });
+            throw error;
+          }
+
+          return data.installation_data;
+        },
+
+        deleteInstallation: async (installQuery) => {
+          const id = installQuery.isEnterpriseInstall
+            ? installQuery.enterpriseId
+            : installQuery.teamId;
+
+          logger.info('🗑️ Deleting installation', { id });
+
+          const { error } = await supabase
+            .from('slack_installations')
+            .delete()
+            .eq('id', id);
+
+          if (error) {
+            logger.error('Failed to delete installation', { id, error: error.message });
+            throw error;
+          }
+        },
+      },
+    });
+
+    // Add custom routes to the receiver's Express app
+
+    // Health check endpoint
+    receiver.app.get('/health', (req, res) => {
+      res.status(200).send('I am alive 🚀');
+    });
+
+    // Landing page
+    receiver.app.get(['/', '/home', '/landing', '/index.html'], (req, res) => {
+      fs.readFile(path.join(__dirname, 'landing_page', 'index.html'), (err, data) => {
+        if (err) {
+          res.status(500).send('Error loading landing page');
+        } else {
+          res.setHeader('Content-Type', 'text/html');
+          res.send(data);
+        }
+      });
+    });
+
+    // CSS for landing page
+    receiver.app.get('/styles.css', (req, res) => {
+      fs.readFile(path.join(__dirname, 'landing_page', 'styles.css'), (err, data) => {
+        if (err) {
+          res.status(500).send('Error loading styles');
+        } else {
+          res.setHeader('Content-Type', 'text/css');
+          res.send(data);
+        }
+      });
+    });
+
+    // Initialize Slack app with the receiver
     const app = new App({
-      token: config.slack.botToken,
-      appToken: config.slack.appToken,
-      socketMode: true,
+      receiver,
       logLevel: config.logging.level === 'debug' ? 'DEBUG' : 'INFO',
     });
+
+    // ============================================
+    // EVERYTHING BELOW THIS LINE IS UNCHANGED
+    // Same event handlers, same logic, same features
+    // ============================================
 
     // Setup notifier with Slack client
     notifier.setClient(app.client);
@@ -109,11 +173,12 @@ async function main() {
       logger.warn('Image generation enabled but LEONARDO_API_KEY not configured');
     }
 
-    // Setup event handlers
+    // Setup event handlers (UNCHANGED - same EventHandler class)
     new EventHandler(app);
 
-    // Start the app
-    await app.start();
+    // Start the app on the specified port
+    await app.start(PORT);
+    logger.info(`✅ Slack app listening on port ${PORT}`);
 
     // Start lifecycle manager (cleanup job)
     await lifecycleManager.start();
@@ -122,7 +187,7 @@ async function main() {
     const healthCheckInterval = setInterval(async () => {
       await healthCheck.logReport();
       metrics.logSummary();
-    }, 60 * 60 * 1000); // Every hour
+    }, 60 * 60 * 1000);
 
     // Initial health check
     await healthCheck.logReport();

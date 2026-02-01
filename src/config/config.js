@@ -124,8 +124,10 @@ function validateConfig() {
     errors.push('SLACK_BOT_TOKEN is required');
   }
 
-  if (!config.slack.appToken) {
-    errors.push('SLACK_APP_TOKEN is required');
+  // SLACK_APP_TOKEN only required for Socket Mode (optional now)
+  // SLACK_SIGNING_SECRET required for HTTP mode
+  if (!config.slack.appToken && !config.slack.signingSecret) {
+    errors.push('Either SLACK_APP_TOKEN (Socket Mode) or SLACK_SIGNING_SECRET (HTTP Mode) is required');
   }
 
   if (!config.supabase.url || !config.supabase.serviceRoleKey) {
