@@ -43,6 +43,7 @@ async function main() {
       installerOptions: {
         directInstall: true,
         redirectUriPath: '/slack/oauth_redirect',
+        stateVerification: false, // Disable state verification for simpler OAuth flow
       },
       installationStore: {
         storeInstallation: async (installation) => {
