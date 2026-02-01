@@ -42,6 +42,32 @@ const healthServer = http.createServer((req, res) => {
         res.end(data);
       }
     });
+  } else if (req.url && req.url.startsWith('/slack/oauth_redirect')) {
+    // Handle Slack OAuth redirect - show success page
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Ghostwriter - Installation</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+          .card { background: white; padding: 40px 60px; border-radius: 16px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+          h1 { color: #333; margin-bottom: 10px; }
+          p { color: #666; font-size: 18px; }
+          .emoji { font-size: 48px; margin-bottom: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="emoji">🎉</div>
+          <h1>Thanks for your interest!</h1>
+          <p>Ghostwriter is currently in private beta.</p>
+          <p>Contact us to get access!</p>
+        </div>
+      </body>
+      </html>
+    `);
   } else {
     res.writeHead(404);
     res.end('Not found');
@@ -61,20 +87,12 @@ async function main() {
     logger.info('Testing Supabase connection...');
     await testConnection();
 
-    // Initialize Slack app with HTTP mode for OAuth
+    // Initialize Slack app
     const app = new App({
-      signingSecret: process.env.SLACK_SIGNING_SECRET,
-      clientId: process.env.SLACK_CLIENT_ID,
-      clientSecret: process.env.SLACK_CLIENT_SECRET,
-      stateSecret: 'my-random-state-secret',
-      scopes: ['chat:write', 'channels:history', 'app_mentions:read', 'files:write'],
+      token: config.slack.botToken,
+      appToken: config.slack.appToken,
+      socketMode: true,
       logLevel: config.logging.level === 'debug' ? 'DEBUG' : 'INFO',
-
-      // CRITICAL: This tells Bolt to listen for the redirect on this specific path
-      installerOptions: {
-        directInstall: true,
-        redirectUriPath: '/slack/oauth_redirect',
-      },
     });
 
     // Setup notifier with Slack client
