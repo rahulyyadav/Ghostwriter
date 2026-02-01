@@ -61,12 +61,20 @@ async function main() {
     logger.info('Testing Supabase connection...');
     await testConnection();
 
-    // Initialize Slack app
+    // Initialize Slack app with HTTP mode for OAuth
     const app = new App({
-      token: config.slack.botToken,
-      appToken: config.slack.appToken,
-      socketMode: true,
+      signingSecret: process.env.SLACK_SIGNING_SECRET,
+      clientId: process.env.SLACK_CLIENT_ID,
+      clientSecret: process.env.SLACK_CLIENT_SECRET,
+      stateSecret: 'my-random-state-secret',
+      scopes: ['chat:write', 'channels:history', 'app_mentions:read', 'files:write'],
       logLevel: config.logging.level === 'debug' ? 'DEBUG' : 'INFO',
+
+      // CRITICAL: This tells Bolt to listen for the redirect on this specific path
+      installerOptions: {
+        directInstall: true,
+        redirectUriPath: '/slack/oauth_redirect',
+      },
     });
 
     // Setup notifier with Slack client
