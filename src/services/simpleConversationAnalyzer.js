@@ -321,7 +321,7 @@ ${postContent}
 ---
 _Reply with \`@PostSuggestionBot generate image\` to create a visual, or ask me to refine this post._`;
 
-        await notifier.postInChannel(channelId, threadTs, notificationMessage);
+        await notifier.postInChannel(channelId, threadTs, notificationMessage, client);
         console.log(`✅ [NOTIFY] User notified!`);
         metrics.trackNotification(true, 1);
 

@@ -42,8 +42,12 @@ class EventHandler {
    */
   setupHandlers() {
     // Handle all messages
-    this.app.message(async ({ message, client }) => {
+    // In HTTP mode, ack() must be called to acknowledge the event within 3 seconds
+    this.app.message(async ({ message, client, ack }) => {
       try {
+        // Acknowledge immediately for HTTP mode (prevents 3-second timeout)
+        if (ack) await ack();
+
         await this.handleMessage(message, client);
       } catch (error) {
         logger.error('Error handling message event', { error, message });
@@ -51,8 +55,12 @@ class EventHandler {
     });
 
     // Handle @mentions
-    this.app.event('app_mention', async ({ event, client }) => {
+    // In HTTP mode, ack() must be called to acknowledge the event within 3 seconds
+    this.app.event('app_mention', async ({ event, client, ack }) => {
       try {
+        // Acknowledge immediately for HTTP mode (prevents 3-second timeout)
+        if (ack) await ack();
+
         await this.handleAppMention(event, client);
       } catch (error) {
         logger.error('Error handling app_mention event', { error, event });

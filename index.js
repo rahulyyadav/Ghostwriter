@@ -78,23 +78,54 @@ async function main() {
         },
 
         fetchInstallation: async (installQuery) => {
+          // Log the full query to debug ID resolution
+          logger.debug('Fetching installation', {
+            installQuery,
+            isEnterprise: installQuery.isEnterpriseInstall,
+            enterpriseId: installQuery.enterpriseId,
+            teamId: installQuery.teamId
+          });
+
           const id = installQuery.isEnterpriseInstall
             ? installQuery.enterpriseId
             : installQuery.teamId;
 
-          logger.debug('Fetching installation', { id });
+          if (!id) {
+            logger.error('No workspace ID found in install query', { installQuery });
+            throw new Error('No workspace ID found in install query');
+          }
 
+          // Use maybeSingle() instead of single() to avoid throwing when no rows found
           const { data, error } = await supabase
             .from('slack_installations')
             .select('installation_data')
             .eq('id', id)
-            .single();
+            .maybeSingle();
 
           if (error) {
-            logger.error('Failed to fetch installation', { id, error: error.message });
+            logger.error('Supabase error fetching installation', { id, error: error.message, code: error.code });
             throw error;
           }
 
+          // If no installation found in DB, check for fallback single-workspace token
+          if (!data) {
+            // Fallback: Use environment variable token for single-workspace mode (migration support)
+            if (process.env.SLACK_BOT_TOKEN) {
+              logger.info('Using fallback SLACK_BOT_TOKEN for workspace', { id });
+              return {
+                team: { id },
+                bot: {
+                  token: process.env.SLACK_BOT_TOKEN,
+                  userId: process.env.SLACK_BOT_USER_ID || 'unknown',
+                },
+              };
+            }
+
+            logger.warn('No installation found for workspace - bot needs to be reinstalled via OAuth', { id });
+            throw new Error(`No installation found for workspace ${id}. Please install the app via the Add to Slack button.`);
+          }
+
+          logger.debug('Installation fetched successfully', { id });
           return data.installation_data;
         },
 

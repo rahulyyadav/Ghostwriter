@@ -56,9 +56,20 @@ _This conversation has strong potential for a public post._
 
   /**
    * Post notification in channel
+   * @param {string} channelId - Channel to post to
+   * @param {string} threadTs - Thread timestamp (optional)
+   * @param {string} message - Message to post
+   * @param {object} client - Slack client (optional, uses default if not provided)
    * @returns {object} Result with message_ts
    */
-  async postInChannel(channelId, threadTs, message) {
+  async postInChannel(channelId, threadTs, message, client = null) {
+    // Use provided client or fall back to default (for multi-workspace OAuth support)
+    const slackClient = client || this.slackClient;
+
+    if (!slackClient) {
+      throw new Error('No Slack client available. Either pass a client or call setClient() first.');
+    }
+
     try {
       const postOptions = {
         channel: channelId,
@@ -71,7 +82,7 @@ _This conversation has strong potential for a public post._
         postOptions.thread_ts = threadTs;
       }
 
-      const result = await this.slackClient.chat.postMessage(postOptions);
+      const result = await slackClient.chat.postMessage(postOptions);
 
       logger.info('Notification posted in channel', { channelId, threadTs, messageTs: result.ts });
       return { success: true, messageTs: result.ts };
