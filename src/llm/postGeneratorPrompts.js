@@ -61,28 +61,45 @@ Return ONLY the post text, nothing else. No quotes, no explanation.`;
  * Generate an image prompt from post content
  */
 function getImagePromptGeneratorPrompt(postContent, platform) {
-  return `Based on this ${platform} post, generate an image generation prompt.
+  return `You are a creative director creating visuals for viral ${platform} posts. Generate an AI image prompt that DIRECTLY relates to this post's message.
 
 POST:
 "${postContent}"
 
-Create a prompt for generating a professional, modern image that:
-1. Visually represents the core message of the post
-2. Uses clean, minimalist design aesthetics
-3. Works well as a social media visual
-4. Does NOT include any text in the image
-5. Uses abstract concepts or metaphors rather than literal representations
+STEP 1: Identify the core theme (examples):
+- Startup struggle → show the grind, late nights, empty celebrations
+- Revenue milestone → show numbers, dashboards, the "emptiness" of metrics
+- Team dynamics → show people collaborating or in conflict
+- Failure/learning → show falling and rising, broken things being rebuilt
+- Growth mindset → show transformation, before/after, evolution
 
-The image should feel:
-- Professional and polished
-- Thought-provoking
-- Suitable for a business/tech audience
+STEP 2: Create a visual metaphor that viewers INSTANTLY connect to the post:
+- If about hustle culture → person working late with coffee cups, dimly lit desk
+- If about hollow victories → lone figure on podium in empty stadium
+- If about chasing metrics → person climbing endless staircase of numbers
+- If about team wins → diverse hands joining together, collaborative workspace
+- If about pivoting → ship changing direction, road fork with signs
 
-Return ONLY the image generation prompt (1-2 sentences), nothing else. Start directly with the visual description.
+REQUIREMENTS:
+- The image MUST visually tell the same story as the post
+- Modern, clean aesthetic (think: Notion, Linear, Vercel vibes)
+- Muted, sophisticated color palette (avoid garish colors)
+- NO text, NO logos, NO UI elements in the image
+- Works as a square (1:1) social media thumbnail
 
-Example outputs:
-- "A minimalist illustration of two paths diverging in a forest, one well-worn and one overgrown, bathed in golden morning light"
-- "Abstract geometric shapes forming a bridge between two floating islands, with a gradient sunset background"`;
+STYLE: Cinematic photography or modern 3D illustration, soft lighting, shallow depth of field, editorial quality.
+
+Return ONLY the image prompt (2-3 sentences max). Be specific about subject, mood, lighting, and composition.
+
+GOOD examples:
+- "A lone entrepreneur sitting at a modern desk late at night, laptop glowing, surrounded by empty coffee cups and scattered papers. Moody blue lighting, cinematic composition, the weight of ambition visible in their posture."
+- "Minimalist 3D render of a golden trophy on a pedestal in a vast empty room, single spotlight, shadows stretching long. The isolation of achievement."
+- "Aerial view of a person standing at a crossroads in a modern city, multiple paths ahead lit differently - one bright, others dim. Decision moment captured."
+
+BAD examples (too generic):
+- "Abstract shapes representing growth"
+- "A beautiful sunset over mountains"
+- "Geometric patterns with gradient colors"`;
 }
 
 /**
