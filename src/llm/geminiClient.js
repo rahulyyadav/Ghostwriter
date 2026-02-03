@@ -919,15 +919,8 @@ Return ONLY valid JSON.`;
 
       const response = await this.makeRequest(prompt, 2); // Fewer retries for speed
 
-      // Parse JSON response
-      let jsonStr = response.trim();
-      jsonStr = jsonStr.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        jsonStr = jsonMatch[0];
-      }
-
-      const result = JSON.parse(jsonStr);
+      // Parse JSON response with robust extraction
+      const result = this.extractJSON(response, { worthy: false, topic: '', summary: '' });
 
       console.log(`[SCOUT] Result: worthy=${result.worthy}, topic="${result.topic || 'none'}"`);
 
@@ -1025,6 +1018,56 @@ Write the post directly. Hook on line 1. Make it SCROLL-STOPPING.`;
    */
   getRateLimitStats() {
     return this.rateLimiter.getStats();
+  }
+
+  /**
+   * Robust JSON extraction from LLM response
+   * Handles markdown code blocks, extra text, and malformed responses
+   *
+   * @param {string} response - Raw LLM response
+   * @param {object} fallback - Default value if parsing fails
+   * @returns {object} Parsed JSON or fallback
+   */
+  extractJSON(response, fallback = {}) {
+    try {
+      let text = response.trim();
+
+      // Remove markdown code blocks
+      text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+
+      // Try to find a balanced JSON object using bracket counting
+      const startIdx = text.indexOf('{');
+      if (startIdx === -1) {
+        logger.warn('No JSON object found in response', { responsePreview: text.substring(0, 100) });
+        return fallback;
+      }
+
+      let braceCount = 0;
+      let endIdx = -1;
+
+      for (let i = startIdx; i < text.length; i++) {
+        if (text[i] === '{') braceCount++;
+        if (text[i] === '}') braceCount--;
+
+        if (braceCount === 0) {
+          endIdx = i;
+          break;
+        }
+      }
+
+      if (endIdx === -1) {
+        logger.warn('Unbalanced braces in JSON response', { responsePreview: text.substring(0, 200) });
+        return fallback;
+      }
+
+      const jsonStr = text.substring(startIdx, endIdx + 1);
+      const parsed = JSON.parse(jsonStr);
+
+      return parsed;
+    } catch (error) {
+      logger.error('JSON extraction failed', { error: error.message, responsePreview: response.substring(0, 200) });
+      return fallback;
+    }
   }
 }
 
